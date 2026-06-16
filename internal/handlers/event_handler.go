@@ -1,0 +1,253 @@
+package handlers
+
+import (
+	"encoding/json"
+	"event-registration/internal/models"
+	"event-registration/internal/service"
+	"fmt"
+	"net/http"
+	"strconv"
+	"time"
+	"github.com/gorilla/mux"
+)
+type EventHandler struct {
+	service *service.EventService
+}
+
+func NewEventHandler(service *service.EventService) *EventHandler {
+	return &EventHandler{service: service}
+}
+
+// CreateEvent создает новое мероприятие
+// POST /api/events
+func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
+	var eventReq struct {
+		Title            string  `json:"title"`
+		Description      *string `json:"description"`
+		Location         string  `json:"location"`
+		StartAt          string  `json:"start_at"`
+		EndAt            string  `json:"end_at"`
+		MaxParticipants  *int    `json:"max_participants"`
+		MaterialsLink    *string `json:"materials_link"`
+		RequirePhone     bool    `json:"require_phone"`
+		RequireCarNumber bool    `json:"require_car_number"`
+		RegistrationLink string  `json:"registration_link"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&eventReq); err != nil {
+		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
+		return
+	}
+
+	// Парсим даты
+	startAt, err := time.Parse("2006-01-02T15:04:05", eventReq.StartAt)
+	if err != nil {
+		http.Error(w, "Неверный формат даты начала. Используйте формат: 2006-01-02T15:04:05", http.StatusBadRequest)
+		return
+	}
+
+	endAt, err := time.Parse("2006-01-02T15:04:05", eventReq.EndAt)
+	if err != nil {
+		http.Error(w, "Неверный формат даты окончания. Используйте формат: 2006-01-02T15:04:05", http.StatusBadRequest)
+		return
+	}
+
+	// Генерируем ссылку на регистрацию, если не передана
+	if eventReq.RegistrationLink == "" {
+		eventReq.RegistrationLink = fmt.Sprintf("event-%d", time.Now().UnixNano())
+	}
+
+	// Создаем модель мероприятия
+	event := &models.Event{
+		Title:              eventReq.Title,
+		Description:        eventReq.Description,
+		Location:           eventReq.Location,
+		StartAt:            startAt,
+		EndAt:              endAt,
+		RegistrationStatus: "open",
+		RegistrationLink:   eventReq.RegistrationLink,
+		MaxParticipants:    eventReq.MaxParticipants,
+		MaterialsLink:      eventReq.MaterialsLink,
+		RequirePhone:       eventReq.RequirePhone,
+		RequireCarNumber:   eventReq.RequireCarNumber,
+	}
+
+	if err := h.service.CreateEvent(event); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(event)
+}
+
+// GetAllEvents получает список всех мероприятий
+// GET /api/events
+func (h *EventHandler) GetAllEvents(w http.ResponseWriter, r *http.Request) {
+	events, err := h.service.GetAllEvents()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(events)
+}
+
+// GetEventByID получает мероприятие по ID
+// GET /api/events/{id}
+func (h *EventHandler) GetEventByID(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	idStr := vars["id"]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		return
+	}
+
+	event, err := h.service.GetEventByID(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(event)
+}
+
+// UpdateEvent обновляет мероприятие
+// PUT /api/events/{id}
+func (h *EventHandler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	idStr := vars["id"]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		return
+	}
+
+	var eventReq struct {
+		Title              string  `json:"title"`
+		Description        *string `json:"description"`
+		Location           string  `json:"location"`
+		StartAt            string  `json:"start_at"`
+		EndAt              string  `json:"end_at"`
+		RegistrationStatus string  `json:"registration_status"`
+		RegistrationLink   string  `json:"registration_link"`
+		MaxParticipants    *int    `json:"max_participants"`
+		MaterialsLink      *string `json:"materials_link"`
+		RequirePhone       bool    `json:"require_phone"`
+		RequireCarNumber   bool    `json:"require_car_number"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&eventReq); err != nil {
+		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
+		return
+	}
+
+	// Парсим даты
+	startAt, err := time.Parse("2006-01-02T15:04:05", eventReq.StartAt)
+	if err != nil {
+		http.Error(w, "Неверный формат даты начала. Используйте формат: 2006-01-02T15:04:05", http.StatusBadRequest)
+		return
+	}
+
+	endAt, err := time.Parse("2006-01-02T15:04:05", eventReq.EndAt)
+	if err != nil {
+		http.Error(w, "Неверный формат даты окончания. Используйте формат: 2006-01-02T15:04:05", http.StatusBadRequest)
+		return
+	}
+
+	// Получаем существующее мероприятие
+	event, err := h.service.GetEventByID(id)
+	if err != nil {
+		http.Error(w, "Мероприятие не найдено", http.StatusNotFound)
+		return
+	}
+
+	// Обновляем поля
+	event.Title = eventReq.Title
+	event.Description = eventReq.Description
+	event.Location = eventReq.Location
+	event.StartAt = startAt
+	event.EndAt = endAt
+	event.MaxParticipants = eventReq.MaxParticipants
+	event.MaterialsLink = eventReq.MaterialsLink
+	event.RequirePhone = eventReq.RequirePhone
+	event.RequireCarNumber = eventReq.RequireCarNumber
+	if eventReq.RegistrationStatus != "" {
+		event.RegistrationStatus = eventReq.RegistrationStatus
+	}
+	if eventReq.RegistrationLink != "" {
+		event.RegistrationLink = eventReq.RegistrationLink
+	}
+
+	if err := h.service.UpdateEvent(event); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(event)
+}
+
+// DeleteEvent удаляет мероприятие
+// DELETE /api/events/{id}
+func (h *EventHandler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	idStr := vars["id"]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.service.DeleteEvent(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Мероприятие удалено"})
+}
+
+// OpenRegistration открывает регистрацию
+// POST /api/events/{id}/open-registration
+func (h *EventHandler) OpenRegistration(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	idStr := vars["id"]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.service.OpenRegistration(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Регистрация открыта"})
+}
+
+// CloseRegistration закрывает регистрацию
+// POST /api/events/{id}/close-registration
+func (h *EventHandler) CloseRegistration(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	idStr := vars["id"]
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.service.CloseRegistration(id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Регистрация закрыта"})
+}
