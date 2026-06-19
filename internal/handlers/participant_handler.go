@@ -15,12 +15,18 @@ import (
 type ParticipantHandler struct {
 	service      *service.ParticipantService
 	eventService *service.EventService
+	emailService *service.EmailService // добавить
 }
 
-func NewParticipantHandler(service *service.ParticipantService, eventService *service.EventService) *ParticipantHandler {
+func NewParticipantHandler(
+	service *service.ParticipantService,
+	eventService *service.EventService,
+	emailService *service.EmailService, // добавить
+) *ParticipantHandler {
 	return &ParticipantHandler{
 		service:      service,
 		eventService: eventService,
+		emailService: emailService, // добавить
 	}
 }
 
@@ -28,13 +34,13 @@ func NewParticipantHandler(service *service.ParticipantService, eventService *se
 // POST /api/participants/register
 func (h *ParticipantHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var participant struct {
-		EventID      int     `json:"event_id"`
-		LastName     string  `json:"last_name"`
-		FirstName    string  `json:"first_name"`
-		MiddleName   *string `json:"middle_name"`
-		Email        string  `json:"email"`
-		Phone        *string `json:"phone"`
-		CarNumber    *string `json:"car_number"`
+		EventID    int     `json:"event_id"`
+		LastName   string  `json:"last_name"`
+		FirstName  string  `json:"first_name"`
+		MiddleName *string `json:"middle_name"`
+		Email      string  `json:"email"`
+		Phone      *string `json:"phone"`
+		CarNumber  *string `json:"car_number"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&participant); err != nil {
@@ -68,24 +74,24 @@ func (h *ParticipantHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	// Создаем модель участника
 	newParticipant := &models.Participant{
-		EventID:      participant.EventID,
-		LastName:     participant.LastName,
-		FirstName:    participant.FirstName,
-		MiddleName:   participant.MiddleName,
-		Email:        participant.Email,
-		Phone:        participant.Phone,
-		CarNumber:    participant.CarNumber,
-		VisitStatus:  "registered",
-		QRToken:      "", // Сгенерируется в сервисе автоматически
+		EventID:     participant.EventID,
+		LastName:    participant.LastName,
+		FirstName:   participant.FirstName,
+		MiddleName:  participant.MiddleName,
+		Email:       participant.Email,
+		Phone:       participant.Phone,
+		CarNumber:   participant.CarNumber,
+		VisitStatus: "registered",
+		QRToken:     "", // Сгенерируется в сервисе автоматически
 	}
 
 	// Создаем участника через сервис
-	if err := h.service.CreateParticipant(newParticipant); err != nil {
+	if err := h.service.CreateParticipant(newParticipant, event.MaxParticipants); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// TODO: Отправить email с QR-кодом
+	go h.emailService.SendRegistrationEmail(newParticipant, event)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -221,7 +227,7 @@ func (h *ParticipantHandler) ImportFromExcel(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Проверяем, существует ли мероприятие
-	_, err = h.eventService.GetEventByID(eventID)
+	event, err := h.eventService.GetEventByID(eventID)
 	if err != nil {
 		http.Error(w, "Мероприятие не найдено", http.StatusNotFound)
 		return
@@ -284,14 +290,17 @@ func (h *ParticipantHandler) ImportFromExcel(w http.ResponseWriter, r *http.Requ
 		}
 
 		// Создаем участника через сервис
-		if err := h.service.CreateParticipant(newParticipant); err != nil {
+		if err := h.service.CreateParticipant(newParticipant, event.MaxParticipants); err != nil {
 			// Пропускаем ошибки (например, дубликат email) и продолжаем импорт
 			continue
 		}
 		importedCount++
 	}
 
-	// TODO: Отправить emails с QR-кодами всем импортированным участникам
+	go func(e *models.Event, eID int) {
+		participants, _ := h.service.GetParticipantsByEventID(eID)
+		h.emailService.SendBulkRegistrationEmails(participants, e)
+	}(event, eventID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

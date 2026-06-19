@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
 	"github.com/gorilla/mux"
 )
+
 type EventHandler struct {
 	service *service.EventService
 }
@@ -116,46 +118,13 @@ func (h *EventHandler) GetEventByID(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(event)
 }
 
-// UpdateEvent обновляет мероприятие
-// PUT /api/events/{id}
+// UpdateEvent обновляет мероприятие (только переданные поля)
+// PATCH /api/events/{id}
 func (h *EventHandler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	idStr := vars["id"]
-	id, err := strconv.Atoi(idStr)
+	id, err := strconv.Atoi(vars["id"])
 	if err != nil {
 		http.Error(w, "Неверный ID", http.StatusBadRequest)
-		return
-	}
-
-	var eventReq struct {
-		Title              string  `json:"title"`
-		Description        *string `json:"description"`
-		Location           string  `json:"location"`
-		StartAt            string  `json:"start_at"`
-		EndAt              string  `json:"end_at"`
-		RegistrationStatus string  `json:"registration_status"`
-		RegistrationLink   string  `json:"registration_link"`
-		MaxParticipants    *int    `json:"max_participants"`
-		MaterialsLink      *string `json:"materials_link"`
-		RequirePhone       bool    `json:"require_phone"`
-		RequireCarNumber   bool    `json:"require_car_number"`
-	}
-
-	if err := json.NewDecoder(r.Body).Decode(&eventReq); err != nil {
-		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
-		return
-	}
-
-	// Парсим даты
-	startAt, err := time.Parse("2006-01-02T15:04:05", eventReq.StartAt)
-	if err != nil {
-		http.Error(w, "Неверный формат даты начала. Используйте формат: 2006-01-02T15:04:05", http.StatusBadRequest)
-		return
-	}
-
-	endAt, err := time.Parse("2006-01-02T15:04:05", eventReq.EndAt)
-	if err != nil {
-		http.Error(w, "Неверный формат даты окончания. Используйте формат: 2006-01-02T15:04:05", http.StatusBadRequest)
 		return
 	}
 
@@ -166,21 +135,57 @@ func (h *EventHandler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Обновляем поля
-	event.Title = eventReq.Title
-	event.Description = eventReq.Description
-	event.Location = eventReq.Location
-	event.StartAt = startAt
-	event.EndAt = endAt
-	event.MaxParticipants = eventReq.MaxParticipants
-	event.MaterialsLink = eventReq.MaterialsLink
-	event.RequirePhone = eventReq.RequirePhone
-	event.RequireCarNumber = eventReq.RequireCarNumber
-	if eventReq.RegistrationStatus != "" {
-		event.RegistrationStatus = eventReq.RegistrationStatus
+	// Декодируем только переданные поля через map
+	var req map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
+		return
 	}
-	if eventReq.RegistrationLink != "" {
-		event.RegistrationLink = eventReq.RegistrationLink
+
+	// Обновляем только то что пришло
+	if v, ok := req["title"].(string); ok && v != "" {
+		event.Title = v
+	}
+	if v, ok := req["location"].(string); ok && v != "" {
+		event.Location = v
+	}
+	if v, ok := req["description"].(string); ok {
+		event.Description = &v
+	}
+	if v, ok := req["registration_status"].(string); ok && v != "" {
+		event.RegistrationStatus = v
+	}
+	if v, ok := req["registration_link"].(string); ok && v != "" {
+		event.RegistrationLink = v
+	}
+	if v, ok := req["materials_link"].(string); ok {
+		event.MaterialsLink = &v
+	}
+	if v, ok := req["require_phone"].(bool); ok {
+		event.RequirePhone = v
+	}
+	if v, ok := req["require_car_number"].(bool); ok {
+		event.RequireCarNumber = v
+	}
+	if v, ok := req["max_participants"].(float64); ok {
+		mp := int(v)
+		event.MaxParticipants = &mp
+	}
+	if v, ok := req["start_at"].(string); ok && v != "" {
+		t, err := time.Parse("2006-01-02T15:04:05", v)
+		if err != nil {
+			http.Error(w, "Неверный формат start_at", http.StatusBadRequest)
+			return
+		}
+		event.StartAt = t
+	}
+	if v, ok := req["end_at"].(string); ok && v != "" {
+		t, err := time.Parse("2006-01-02T15:04:05", v)
+		if err != nil {
+			http.Error(w, "Неверный формат end_at", http.StatusBadRequest)
+			return
+		}
+		event.EndAt = t
 	}
 
 	if err := h.service.UpdateEvent(event); err != nil {
@@ -250,4 +255,24 @@ func (h *EventHandler) CloseRegistration(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "Регистрация закрыта"})
+}
+
+// GetStats возвращает статистику по мероприятию
+// GET /api/events/{id}/stats
+func (h *EventHandler) GetStats(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		return
+	}
+
+	stats, err := h.service.GetStats(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
 }

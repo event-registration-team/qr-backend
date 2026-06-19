@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"errors"
 	"event-registration/internal/models"
 	"time"
 )
@@ -44,7 +45,7 @@ func (r *ParticipantRepo) GetParticipantByID(id int) (*models.Participant, error
 		SELECT id, event_id, last_name, first_name, middle_name, email, phone, car_number, 
 		       qr_token, visit_status, checked_in_at, registered_at, created_at, updated_at 
 		FROM participants WHERE id = $1`
-	
+
 	var p models.Participant
 	err := r.db.QueryRow(query, id).Scan(
 		&p.ID, &p.EventID, &p.LastName, &p.FirstName, &p.MiddleName, &p.Email,
@@ -52,7 +53,7 @@ func (r *ParticipantRepo) GetParticipantByID(id int) (*models.Participant, error
 		&p.RegisteredAt, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
-		return nil, nil
+		return nil, sql.ErrNoRows
 	}
 	if err != nil {
 		return nil, err
@@ -66,7 +67,7 @@ func (r *ParticipantRepo) GetParticipantByQRToken(qrToken string) (*models.Parti
 		SELECT id, event_id, last_name, first_name, middle_name, email, phone, car_number, 
 		       qr_token, visit_status, checked_in_at, registered_at, created_at, updated_at 
 		FROM participants WHERE qr_token = $1`
-	
+
 	var p models.Participant
 	err := r.db.QueryRow(query, qrToken).Scan(
 		&p.ID, &p.EventID, &p.LastName, &p.FirstName, &p.MiddleName, &p.Email,
@@ -74,7 +75,7 @@ func (r *ParticipantRepo) GetParticipantByQRToken(qrToken string) (*models.Parti
 		&p.RegisteredAt, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
-		return nil, nil
+		return nil, sql.ErrNoRows
 	}
 	if err != nil {
 		return nil, err
@@ -88,7 +89,7 @@ func (r *ParticipantRepo) GetParticipantsByEventID(eventID int) ([]models.Partic
 		SELECT id, event_id, last_name, first_name, middle_name, email, phone, car_number, 
 		       qr_token, visit_status, checked_in_at, registered_at, created_at, updated_at 
 		FROM participants WHERE event_id = $1 ORDER BY registered_at DESC`
-	
+
 	rows, err := r.db.Query(query, eventID)
 	if err != nil {
 		return nil, err
@@ -128,7 +129,7 @@ func (r *ParticipantRepo) UpdateParticipant(participant *models.Participant) err
 	if err != nil {
 		return err
 	}
-	
+
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
 		return sql.ErrNoRows
@@ -150,7 +151,7 @@ func (r *ParticipantRepo) MarkAsVisited(id int) error {
 // CountParticipantsByEventID считает количество участников мероприятия (для проверки лимита)
 func (r *ParticipantRepo) CountParticipantsByEventID(eventID int) (int, error) {
 	query := `SELECT COUNT(*) FROM participants WHERE event_id = $1`
-	
+
 	var count int
 	err := r.db.QueryRow(query, eventID).Scan(&count)
 	return count, err
@@ -169,13 +170,14 @@ func (r *ParticipantRepo) DeleteParticipant(id int) error {
 	}
 	return nil
 }
+
 // GetParticipantByEventIDAndEmail находит участника по event_id и email
 func (r *ParticipantRepo) GetParticipantByEventIDAndEmail(eventID int, email string) (*models.Participant, error) {
 	query := `
 		SELECT id, event_id, last_name, first_name, middle_name, email, phone, car_number, 
 		       qr_token, visit_status, checked_in_at, registered_at, created_at, updated_at 
 		FROM participants WHERE event_id = $1 AND email = $2`
-	
+
 	var p models.Participant
 	err := r.db.QueryRow(query, eventID, email).Scan(
 		&p.ID, &p.EventID, &p.LastName, &p.FirstName, &p.MiddleName, &p.Email,
@@ -183,10 +185,62 @@ func (r *ParticipantRepo) GetParticipantByEventIDAndEmail(eventID int, email str
 		&p.RegisteredAt, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
-		return nil, nil
+		return nil, sql.ErrNoRows
 	}
 	if err != nil {
 		return nil, err
 	}
 	return &p, nil
+}
+
+// CreateParticipantTx создает участника внутри транзакции с проверкой лимита
+func (r *ParticipantRepo) CreateParticipantTx(participant *models.Participant, maxParticipants *int) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Блокируем строку события чтобы никто параллельно не прошёл проверку лимита
+	_, err = tx.Exec(`SELECT id FROM events WHERE id = $1 FOR UPDATE`, participant.EventID)
+	if err != nil {
+		return err
+	}
+
+	// Проверяем лимит внутри транзакции
+	if maxParticipants != nil {
+		var count int
+		err = tx.QueryRow(`SELECT COUNT(*) FROM participants WHERE event_id = $1`, participant.EventID).Scan(&count)
+		if err != nil {
+			return err
+		}
+		if count >= *maxParticipants {
+			return errors.New("превышен лимит участников")
+		}
+	}
+
+	// Вставляем участника
+	query := `
+		INSERT INTO participants 
+		(event_id, last_name, first_name, middle_name, email, phone, car_number, qr_token, visit_status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		RETURNING id, registered_at, created_at, updated_at`
+
+	err = tx.QueryRow(
+		query,
+		participant.EventID,
+		participant.LastName,
+		participant.FirstName,
+		participant.MiddleName,
+		participant.Email,
+		participant.Phone,
+		participant.CarNumber,
+		participant.QRToken,
+		participant.VisitStatus,
+	).Scan(&participant.ID, &participant.RegisteredAt, &participant.CreatedAt, &participant.UpdatedAt)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }

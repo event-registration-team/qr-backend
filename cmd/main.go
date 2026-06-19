@@ -29,12 +29,13 @@ func main() {
 	// Инициализируем сервисы
 	adminService := service.NewAdminService(adminRepo)
 	eventService := service.NewEventService(eventRepo, participantRepo)
+	emailService := service.NewEmailService(cfg.SMTP)
 	participantService := service.NewParticipantService(participantRepo)
 
 	// Инициализируем хендлеры
 	adminHandler := handlers.NewAdminHandler(adminService)
 	eventHandler := handlers.NewEventHandler(eventService)
-	participantHandler := handlers.NewParticipantHandler(participantService, eventService)
+	participantHandler := handlers.NewParticipantHandler(participantService, eventService, emailService)
 
 	// Создаем роутер
 	r := mux.NewRouter()
@@ -49,10 +50,11 @@ func main() {
 	r.HandleFunc("/api/events", eventHandler.CreateEvent).Methods("POST")
 	r.HandleFunc("/api/events", eventHandler.GetAllEvents).Methods("GET")
 	r.HandleFunc("/api/events/{id}", eventHandler.GetEventByID).Methods("GET")
-	r.HandleFunc("/api/events/{id}", eventHandler.UpdateEvent).Methods("PUT")
+	r.HandleFunc("/api/events/{id}", eventHandler.UpdateEvent).Methods("PATCH")
 	r.HandleFunc("/api/events/{id}", eventHandler.DeleteEvent).Methods("DELETE")
 	r.HandleFunc("/api/events/{id}/open-registration", eventHandler.OpenRegistration).Methods("POST")
 	r.HandleFunc("/api/events/{id}/close-registration", eventHandler.CloseRegistration).Methods("POST")
+	r.HandleFunc("/api/events/{id}/stats", eventHandler.GetStats).Methods("GET")
 
 	// Participant routes
 	r.HandleFunc("/api/participants/register", participantHandler.Register).Methods("POST")
@@ -70,6 +72,6 @@ func main() {
 	fmt.Printf("\n🚀 Сервер запущен на порту %s\n", port)
 	fmt.Printf("📍 API доступно по адресу: http://localhost:%s\n", port)
 	fmt.Printf("📋 Swagger (если будет): http://localhost:%s/api/docs\n\n", port)
-	
+
 	log.Fatal(http.ListenAndServe(":"+port, r))
 }

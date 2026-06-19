@@ -17,12 +17,11 @@ func NewParticipantService(repo *repository.ParticipantRepo) *ParticipantService
 }
 
 // CreateParticipant создает нового участника
-func (s *ParticipantService) CreateParticipant(participant *models.Participant) error {
+func (s *ParticipantService) CreateParticipant(participant *models.Participant, maxParticipants *int) error {
 	if participant.LastName == "" || participant.FirstName == "" || participant.Email == "" {
 		return errors.New("фамилия, имя и email обязательны")
 	}
 
-	// Проверяем уникальность email на мероприятие
 	existing, err := s.repo.GetParticipantByEventIDAndEmail(participant.EventID, participant.Email)
 	if err != nil {
 		return err
@@ -31,14 +30,13 @@ func (s *ParticipantService) CreateParticipant(participant *models.Participant) 
 		return errors.New("участник с таким email уже зарегистрирован на это мероприятие")
 	}
 
-	// Генерируем QR-токен, если он не установлен
 	if participant.QRToken == "" {
 		participant.QRToken = generateQRToken()
 	}
 
 	participant.VisitStatus = "registered"
 
-	return s.repo.CreateParticipant(participant)
+	return s.repo.CreateParticipantTx(participant, maxParticipants)
 }
 
 // GetParticipantByID получает участника по ID
@@ -47,7 +45,7 @@ func (s *ParticipantService) GetParticipantByID(id int) (*models.Participant, er
 	if err != nil {
 		return nil, err
 	}
-	if participant == nil {
+	if err != nil {
 		return nil, errors.New("участник не найден")
 	}
 	return participant, nil
@@ -59,8 +57,8 @@ func (s *ParticipantService) GetParticipantByQRToken(qrToken string) (*models.Pa
 	if err != nil {
 		return nil, err
 	}
-	if participant == nil {
-		return nil, errors.New("участник с таким QR-кодом не найден")
+	if err != nil {
+		return nil, errors.New("участник не найден")
 	}
 	return participant, nil
 }
@@ -74,13 +72,9 @@ func (s *ParticipantService) GetParticipantsByEventID(eventID int) ([]models.Par
 func (s *ParticipantService) MarkAsVisited(id int) error {
 	participant, err := s.repo.GetParticipantByID(id)
 	if err != nil {
-		return err
-	}
-	if participant == nil {
 		return errors.New("участник не найден")
 	}
 
-	// Проверяем, не отмечен ли уже как посетивший
 	if participant.VisitStatus == "visited" {
 		return errors.New("участник уже отмечен как посетивший мероприятие")
 	}
