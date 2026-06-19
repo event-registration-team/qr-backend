@@ -25,6 +25,14 @@ func (s *EventService) CreateEvent(event *models.Event) error {
 		return errors.New("название и место проведения обязательны")
 	}
 
+	if event.EndAt.Before(event.StartAt) {
+		return errors.New("дата окончания не может быть раньше даты начала")
+	}
+
+	if event.MaxParticipants != nil && *event.MaxParticipants <= 0 {
+		return errors.New("максимальное количество участников должно быть больше нуля")
+	}
+
 	// Если статус не указан, устанавливаем по умолчанию
 	if event.RegistrationStatus == "" {
 		event.RegistrationStatus = "open"
@@ -54,6 +62,14 @@ func (s *EventService) GetEventByID(id int) (*models.Event, error) {
 func (s *EventService) UpdateEvent(event *models.Event) error {
 	if event.Title == "" || event.Location == "" {
 		return errors.New("название и место проведения обязательны")
+	}
+
+	if event.EndAt.Before(event.StartAt) {
+		return errors.New("дата окончания не может быть раньше даты начала")
+	}
+
+	if event.MaxParticipants != nil && *event.MaxParticipants <= 0 {
+		return errors.New("максимальное количество участников должно быть больше нуля")
 	}
 	return s.eventRepo.UpdateEvent(event)
 }

@@ -50,7 +50,7 @@ func main() {
 	r.HandleFunc("/api/events", eventHandler.CreateEvent).Methods("POST")
 	r.HandleFunc("/api/events", eventHandler.GetAllEvents).Methods("GET")
 	r.HandleFunc("/api/events/{id}", eventHandler.GetEventByID).Methods("GET")
-	r.HandleFunc("/api/events/{id}", eventHandler.UpdateEvent).Methods("PUT")
+	r.HandleFunc("/api/events/{id}", eventHandler.UpdateEvent).Methods("PATCH")
 	r.HandleFunc("/api/events/{id}", eventHandler.DeleteEvent).Methods("DELETE")
 	r.HandleFunc("/api/events/{id}/open-registration", eventHandler.OpenRegistration).Methods("POST")
 	r.HandleFunc("/api/events/{id}/close-registration", eventHandler.CloseRegistration).Methods("POST")

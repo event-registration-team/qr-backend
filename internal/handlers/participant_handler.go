@@ -86,7 +86,7 @@ func (h *ParticipantHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Создаем участника через сервис
-	if err := h.service.CreateParticipant(newParticipant); err != nil {
+	if err := h.service.CreateParticipant(newParticipant, event.MaxParticipants); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -290,7 +290,7 @@ func (h *ParticipantHandler) ImportFromExcel(w http.ResponseWriter, r *http.Requ
 		}
 
 		// Создаем участника через сервис
-		if err := h.service.CreateParticipant(newParticipant); err != nil {
+		if err := h.service.CreateParticipant(newParticipant, event.MaxParticipants); err != nil {
 			// Пропускаем ошибки (например, дубликат email) и продолжаем импорт
 			continue
 		}
