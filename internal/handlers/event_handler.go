@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
 	"github.com/gorilla/mux"
 )
+
 type EventHandler struct {
 	service *service.EventService
 }
@@ -250,4 +252,24 @@ func (h *EventHandler) CloseRegistration(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "Регистрация закрыта"})
+}
+
+// GetStats возвращает статистику по мероприятию
+// GET /api/events/{id}/stats
+func (h *EventHandler) GetStats(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		return
+	}
+
+	stats, err := h.service.GetStats(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
 }
