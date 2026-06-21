@@ -8,6 +8,8 @@ import (
 	"github.com/google/uuid"
 )
 
+var ErrEmailAlreadyRegistered = errors.New("участник с таким email уже зарегистрирован на это мероприятие")
+
 type ParticipantService struct {
 	repo *repository.ParticipantRepo
 }

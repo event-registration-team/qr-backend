@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"event-registration/internal/models"
 	"event-registration/internal/service"
 	"fmt"
@@ -87,7 +88,11 @@ func (h *ParticipantHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	// Создаем участника через сервис
 	if err := h.service.CreateParticipant(newParticipant, event.MaxParticipants); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		if errors.Is(err, service.ErrEmailAlreadyRegistered) {
+			http.Error(w, err.Error(), http.StatusConflict) // 409
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
 		return
 	}
 
