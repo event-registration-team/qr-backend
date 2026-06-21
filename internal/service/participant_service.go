@@ -1,6 +1,7 @@
 package service
 
 import (
+	"database/sql"
 	"errors"
 	"event-registration/internal/models"
 	"event-registration/internal/repository"
@@ -25,7 +26,7 @@ func (s *ParticipantService) CreateParticipant(participant *models.Participant, 
 	}
 
 	existing, err := s.repo.GetParticipantByEventIDAndEmail(participant.EventID, participant.Email)
-	if err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		return err
 	}
 	if existing != nil {
@@ -45,9 +46,6 @@ func (s *ParticipantService) CreateParticipant(participant *models.Participant, 
 func (s *ParticipantService) GetParticipantByID(id int) (*models.Participant, error) {
 	participant, err := s.repo.GetParticipantByID(id)
 	if err != nil {
-		return nil, err
-	}
-	if err != nil {
 		return nil, errors.New("участник не найден")
 	}
 	return participant, nil
@@ -57,10 +55,7 @@ func (s *ParticipantService) GetParticipantByID(id int) (*models.Participant, er
 func (s *ParticipantService) GetParticipantByQRToken(qrToken string) (*models.Participant, error) {
 	participant, err := s.repo.GetParticipantByQRToken(qrToken)
 	if err != nil {
-		return nil, err
-	}
-	if err != nil {
-		return nil, errors.New("участник не найден")
+		return nil, errors.New("участник с таким QR-кодом не найден")
 	}
 	return participant, nil
 }
