@@ -27,7 +27,7 @@ func (s *ParticipantService) CreateParticipant(participant *models.Participant, 
 		return err
 	}
 	if existing != nil {
-		return errors.New("участник с таким email уже зарегистрирован на это мероприятие")
+		return ErrEmailAlreadyRegistered
 	}
 
 	if participant.QRToken == "" {
