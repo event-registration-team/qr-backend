@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"event-registration/internal/models"
 	"event-registration/internal/service"
+	"event-registration/pkg/utils"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -37,20 +38,20 @@ func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&eventReq); err != nil {
-		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Неверный формат данных", http.StatusBadRequest)
 		return
 	}
 
 	// Парсим даты
 	startAt, err := time.Parse("2006-01-02T15:04:05", eventReq.StartAt)
 	if err != nil {
-		http.Error(w, "Неверный формат даты начала. Используйте формат: 2006-01-02T15:04:05", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Неверный формат даты начала. Используйте формат: 2006-01-02T15:04:05", http.StatusBadRequest)
 		return
 	}
 
 	endAt, err := time.Parse("2006-01-02T15:04:05", eventReq.EndAt)
 	if err != nil {
-		http.Error(w, "Неверный формат даты окончания. Используйте формат: 2006-01-02T15:04:05", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Неверный формат даты окончания. Используйте формат: 2006-01-02T15:04:05", http.StatusBadRequest)
 		return
 	}
 
@@ -75,7 +76,7 @@ func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.service.CreateEvent(event); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -89,7 +90,7 @@ func (h *EventHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 func (h *EventHandler) GetAllEvents(w http.ResponseWriter, r *http.Request) {
 	events, err := h.service.GetAllEvents()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -104,19 +105,19 @@ func (h *EventHandler) GetEventByID(w http.ResponseWriter, r *http.Request) {
 	idStr := vars["id"]
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Неверный ID", http.StatusBadRequest)
 		return
 	}
 
 	event, err := h.service.GetEventByID(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		utils.WriteJSONError(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
 	stats, err := h.service.GetStats(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -146,21 +147,21 @@ func (h *EventHandler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := strconv.Atoi(vars["id"])
 	if err != nil {
-		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Неверный ID", http.StatusBadRequest)
 		return
 	}
 
 	// Получаем существующее мероприятие
 	event, err := h.service.GetEventByID(id)
 	if err != nil {
-		http.Error(w, "Мероприятие не найдено", http.StatusNotFound)
+		utils.WriteJSONError(w, "Мероприятие не найдено", http.StatusNotFound)
 		return
 	}
 
 	// Декодируем только переданные поля через map
 	var req map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Неверный формат данных", http.StatusBadRequest)
 		return
 	}
 
@@ -196,7 +197,7 @@ func (h *EventHandler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 	if v, ok := req["start_at"].(string); ok && v != "" {
 		t, err := time.Parse("2006-01-02T15:04:05", v)
 		if err != nil {
-			http.Error(w, "Неверный формат start_at", http.StatusBadRequest)
+			utils.WriteJSONError(w, "Неверный формат start_at", http.StatusBadRequest)
 			return
 		}
 		event.StartAt = t
@@ -204,14 +205,14 @@ func (h *EventHandler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 	if v, ok := req["end_at"].(string); ok && v != "" {
 		t, err := time.Parse("2006-01-02T15:04:05", v)
 		if err != nil {
-			http.Error(w, "Неверный формат end_at", http.StatusBadRequest)
+			utils.WriteJSONError(w, "Неверный формат end_at", http.StatusBadRequest)
 			return
 		}
 		event.EndAt = t
 	}
 
 	if err := h.service.UpdateEvent(event); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -226,12 +227,12 @@ func (h *EventHandler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
 	idStr := vars["id"]
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Неверный ID", http.StatusBadRequest)
 		return
 	}
 
 	if err := h.service.DeleteEvent(id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -246,12 +247,12 @@ func (h *EventHandler) OpenRegistration(w http.ResponseWriter, r *http.Request) 
 	idStr := vars["id"]
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Неверный ID", http.StatusBadRequest)
 		return
 	}
 
 	if err := h.service.OpenRegistration(id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -266,12 +267,12 @@ func (h *EventHandler) CloseRegistration(w http.ResponseWriter, r *http.Request)
 	idStr := vars["id"]
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Неверный ID", http.StatusBadRequest)
 		return
 	}
 
 	if err := h.service.CloseRegistration(id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -285,13 +286,13 @@ func (h *EventHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id, err := strconv.Atoi(vars["id"])
 	if err != nil {
-		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Неверный ID", http.StatusBadRequest)
 		return
 	}
 
 	stats, err := h.service.GetStats(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 

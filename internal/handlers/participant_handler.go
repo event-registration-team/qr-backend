@@ -5,6 +5,7 @@ import (
 	"errors"
 	"event-registration/internal/models"
 	"event-registration/internal/service"
+	"event-registration/pkg/utils"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -45,31 +46,31 @@ func (h *ParticipantHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&participant); err != nil {
-		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Неверный формат данных", http.StatusBadRequest)
 		return
 	}
 
 	// Проверяем, существует ли мероприятие и открыта ли регистрация
 	event, err := h.eventService.GetEventByID(participant.EventID)
 	if err != nil {
-		http.Error(w, "Мероприятие не найдено", http.StatusNotFound)
+		utils.WriteJSONError(w, "Мероприятие не найдено", http.StatusNotFound)
 		return
 	}
 
 	if event.RegistrationStatus != "open" {
-		http.Error(w, "Регистрация на это мероприятие закрыта", http.StatusForbidden)
+		utils.WriteJSONError(w, "Регистрация на это мероприятие закрыта", http.StatusForbidden)
 		return
 	}
 
 	// Проверяем лимит участников
 	allowed, err := h.eventService.CheckRegistrationLimit(event.ID, event.MaxParticipants)
 	if err != nil {
-		http.Error(w, "Ошибка проверки лимита", http.StatusInternalServerError)
+		utils.WriteJSONError(w, "Ошибка проверки лимита", http.StatusInternalServerError)
 		return
 	}
 
 	if !allowed {
-		http.Error(w, "Извините, регистрация завершена", http.StatusForbidden)
+		utils.WriteJSONError(w, "Извините, регистрация завершена", http.StatusForbidden)
 		return
 	}
 
@@ -89,9 +90,9 @@ func (h *ParticipantHandler) Register(w http.ResponseWriter, r *http.Request) {
 	// Создаем участника через сервис
 	if err := h.service.CreateParticipant(newParticipant, event.MaxParticipants); err != nil {
 		if errors.Is(err, service.ErrEmailAlreadyRegistered) {
-			http.Error(w, err.Error(), http.StatusConflict) // 409
+			utils.WriteJSONError(w, err.Error(), http.StatusConflict) // 409
 		} else {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
 		}
 		return
 	}
@@ -112,13 +113,13 @@ func (h *ParticipantHandler) Register(w http.ResponseWriter, r *http.Request) {
 func (h *ParticipantHandler) GetByQRToken(w http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
 	if token == "" {
-		http.Error(w, "QR-токен не указан", http.StatusBadRequest)
+		utils.WriteJSONError(w, "QR-токен не указан", http.StatusBadRequest)
 		return
 	}
 
 	participant, err := h.service.GetParticipantByQRToken(token)
 	if err != nil {
-		http.Error(w, "Участник не найден", http.StatusNotFound)
+		utils.WriteJSONError(w, "Участник не найден", http.StatusNotFound)
 		return
 	}
 
@@ -132,12 +133,12 @@ func (h *ParticipantHandler) MarkAsVisited(w http.ResponseWriter, r *http.Reques
 	idStr := r.URL.Query().Get("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Неверный ID", http.StatusBadRequest)
 		return
 	}
 
 	if err := h.service.MarkAsVisited(id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -153,13 +154,13 @@ func (h *ParticipantHandler) GetByEventID(w http.ResponseWriter, r *http.Request
 	eventIDStr := r.URL.Query().Get("event_id")
 	eventID, err := strconv.Atoi(eventIDStr)
 	if err != nil {
-		http.Error(w, "Неверный ID мероприятия", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Неверный ID мероприятия", http.StatusBadRequest)
 		return
 	}
 
 	participants, err := h.service.GetParticipantsByEventID(eventID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -173,13 +174,13 @@ func (h *ParticipantHandler) ExportToExcel(w http.ResponseWriter, r *http.Reques
 	eventIDStr := r.URL.Query().Get("event_id")
 	eventID, err := strconv.Atoi(eventIDStr)
 	if err != nil {
-		http.Error(w, "Неверный ID мероприятия", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Неверный ID мероприятия", http.StatusBadRequest)
 		return
 	}
 
 	participants, err := h.service.GetParticipantsByEventID(eventID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -216,7 +217,7 @@ func (h *ParticipantHandler) ExportToExcel(w http.ResponseWriter, r *http.Reques
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=participants_%d.xlsx", eventID))
 
 	if err := f.Write(w); err != nil {
-		http.Error(w, "Ошибка экспорта", http.StatusInternalServerError)
+		utils.WriteJSONError(w, "Ошибка экспорта", http.StatusInternalServerError)
 		return
 	}
 }
@@ -227,21 +228,21 @@ func (h *ParticipantHandler) ImportFromExcel(w http.ResponseWriter, r *http.Requ
 	eventIDStr := r.URL.Query().Get("event_id")
 	eventID, err := strconv.Atoi(eventIDStr)
 	if err != nil {
-		http.Error(w, "Неверный ID мероприятия", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Неверный ID мероприятия", http.StatusBadRequest)
 		return
 	}
 
 	// Проверяем, существует ли мероприятие
 	event, err := h.eventService.GetEventByID(eventID)
 	if err != nil {
-		http.Error(w, "Мероприятие не найдено", http.StatusNotFound)
+		utils.WriteJSONError(w, "Мероприятие не найдено", http.StatusNotFound)
 		return
 	}
 
 	// Получаем файл
 	file, _, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, "Файл не загружен", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Файл не загружен", http.StatusBadRequest)
 		return
 	}
 	defer file.Close()
@@ -249,13 +250,13 @@ func (h *ParticipantHandler) ImportFromExcel(w http.ResponseWriter, r *http.Requ
 	// Читаем Excel
 	f, err := excelize.OpenReader(file)
 	if err != nil {
-		http.Error(w, "Ошибка чтения файла", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Ошибка чтения файла", http.StatusBadRequest)
 		return
 	}
 
 	rows, err := f.GetRows("Sheet1")
 	if err != nil {
-		http.Error(w, "Ошибка чтения листа", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Ошибка чтения листа", http.StatusBadRequest)
 		return
 	}
 
@@ -319,20 +320,20 @@ func (h *ParticipantHandler) GetQRCode(w http.ResponseWriter, r *http.Request) {
 	idStr := r.URL.Query().Get("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Неверный ID", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Неверный ID", http.StatusBadRequest)
 		return
 	}
 
 	participant, err := h.service.GetParticipantByID(id)
 	if err != nil {
-		http.Error(w, "Участник не найден", http.StatusNotFound)
+		utils.WriteJSONError(w, "Участник не найден", http.StatusNotFound)
 		return
 	}
 
 	// Генерируем QR-код
 	pngData, err := qrcode.Encode(participant.QRToken, qrcode.Medium, 256)
 	if err != nil {
-		http.Error(w, "Ошибка генерации QR-кода", http.StatusInternalServerError)
+		utils.WriteJSONError(w, "Ошибка генерации QR-кода", http.StatusInternalServerError)
 		return
 	}
 
