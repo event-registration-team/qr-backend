@@ -3,7 +3,9 @@ package utils
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	qrcode "github.com/skip2/go-qrcode"
@@ -74,4 +76,11 @@ func TruncateString(s string, maxLen int) string {
 		return string(runes[:maxLen]) + "..."
 	}
 	return s
+}
+
+// WriteJSONError пишет ошибку в формате {"error": "..."} с нужным HTTP-статусом
+func WriteJSONError(w http.ResponseWriter, message string, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }

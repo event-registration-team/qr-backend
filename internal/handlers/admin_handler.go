@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"event-registration/internal/service"
+	"event-registration/pkg/utils"
 	"net/http"
 )
 
@@ -23,18 +24,18 @@ func (h *AdminHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&loginData); err != nil {
-		http.Error(w, "Неверный формат данных", http.StatusBadRequest)
+		utils.WriteJSONError(w, "Неверный формат данных", http.StatusBadRequest)
 		return
 	}
 
 	admin, err := h.service.GetAdminByEmail(loginData.Email)
 	if err != nil {
-		http.Error(w, "Ошибка авторизации", http.StatusInternalServerError)
+		utils.WriteJSONError(w, "Ошибка авторизации", http.StatusInternalServerError)
 		return
 	}
 
 	if admin == nil {
-		http.Error(w, "Неверный email или пароль", http.StatusUnauthorized)
+		utils.WriteJSONError(w, "Неверный email или пароль", http.StatusUnauthorized)
 		return
 	}
 
