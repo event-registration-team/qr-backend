@@ -13,6 +13,21 @@ import (
 	"github.com/gorilla/mux"
 )
 
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:5173")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	// Загружаем конфигурацию
 	cfg := config.Load()
@@ -73,5 +88,5 @@ func main() {
 	fmt.Printf("📍 API доступно по адресу: http://localhost:%s\n", port)
 	fmt.Printf("📋 Swagger (если будет): http://localhost:%s/api/docs\n\n", port)
 
-	log.Fatal(http.ListenAndServe(":"+port, r))
+	log.Fatal(http.ListenAndServe(":"+port, corsMiddleware(r)))
 }

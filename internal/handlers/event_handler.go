@@ -114,8 +114,30 @@ func (h *EventHandler) GetEventByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	stats, err := h.service.GetStats(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(event)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":                         event.ID,
+		"title":                      event.Title,
+		"description":                event.Description,
+		"location":                   event.Location,
+		"start_at":                   event.StartAt,
+		"end_at":                     event.EndAt,
+		"registration_status":        event.RegistrationStatus,
+		"registration_link":          event.RegistrationLink,
+		"max_participants":           event.MaxParticipants,
+		"materials_link":             event.MaterialsLink,
+		"require_phone":              event.RequirePhone,
+		"require_car_number":         event.RequireCarNumber,
+		"created_at":                 event.CreatedAt,
+		"updated_at":                 event.UpdatedAt,
+		"current_participants_count": stats["total"],
+	})
 }
 
 // UpdateEvent обновляет мероприятие (только переданные поля)

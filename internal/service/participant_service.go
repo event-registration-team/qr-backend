@@ -8,6 +8,8 @@ import (
 	"github.com/google/uuid"
 )
 
+var ErrEmailAlreadyRegistered = errors.New("участник с таким email уже зарегистрирован на это мероприятие")
+
 type ParticipantService struct {
 	repo *repository.ParticipantRepo
 }
@@ -27,7 +29,7 @@ func (s *ParticipantService) CreateParticipant(participant *models.Participant, 
 		return err
 	}
 	if existing != nil {
-		return errors.New("участник с таким email уже зарегистрирован на это мероприятие")
+		return ErrEmailAlreadyRegistered
 	}
 
 	if participant.QRToken == "" {
