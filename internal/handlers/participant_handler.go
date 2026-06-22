@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/gorilla/mux"
 	"github.com/skip2/go-qrcode"
 	"github.com/xuri/excelize/v2"
 )
@@ -130,8 +131,8 @@ func (h *ParticipantHandler) GetByQRToken(w http.ResponseWriter, r *http.Request
 // MarkAsVisited отмечает участника как посетившего мероприятие
 // POST /api/participants/{id}/check-in
 func (h *ParticipantHandler) MarkAsVisited(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	id, err := strconv.Atoi(idStr)
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
 	if err != nil {
 		utils.WriteJSONError(w, "Неверный ID", http.StatusBadRequest)
 		return
@@ -317,8 +318,8 @@ func (h *ParticipantHandler) ImportFromExcel(w http.ResponseWriter, r *http.Requ
 // GetQRCode генерирует и возвращает QR-код для участника
 // GET /api/participants/{id}/qrcode
 func (h *ParticipantHandler) GetQRCode(w http.ResponseWriter, r *http.Request) {
-	idStr := r.URL.Query().Get("id")
-	id, err := strconv.Atoi(idStr)
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
 	if err != nil {
 		utils.WriteJSONError(w, "Неверный ID", http.StatusBadRequest)
 		return
