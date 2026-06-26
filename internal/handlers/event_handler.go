@@ -299,3 +299,16 @@ func (h *EventHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
 }
+
+// GetDashboardStats возвращает общую статистику для дашборда
+// GET /api/dashboard/stats
+func (h *EventHandler) GetDashboardStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.service.GetDashboardStats()
+	if err != nil {
+		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
+}

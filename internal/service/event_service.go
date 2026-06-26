@@ -4,6 +4,8 @@ import (
 	"errors"
 	"event-registration/internal/models"
 	"event-registration/internal/repository"
+	"math"
+	"time"
 )
 
 type EventService struct {
@@ -140,5 +142,59 @@ func (s *EventService) GetStats(eventID int) (map[string]int, error) {
 		"total":   total,
 		"visited": visited,
 		"absent":  total - visited,
+	}, nil
+}
+
+// GetDashboardStats возвращает общую статистику для дашборда
+func (s *EventService) GetDashboardStats() (map[string]interface{}, error) {
+	events, err := s.eventRepo.GetAllEvents()
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	firstDayOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	weekAgo := now.AddDate(0, 0, -7)
+
+	totalEvents := len(events)
+	eventsThisMonth := 0
+	for _, e := range events {
+		if e.CreatedAt.After(firstDayOfMonth) {
+			eventsThisMonth++
+		}
+	}
+
+	totalParticipants := 0
+	totalVisited := 0
+	participantsThisWeek := 0
+
+	for _, e := range events {
+		participants, err := s.participantRepo.GetParticipantsByEventID(e.ID)
+		if err != nil {
+			continue
+		}
+		totalParticipants += len(participants)
+		for _, p := range participants {
+			if p.VisitStatus == "visited" {
+				totalVisited++
+			}
+			if p.RegisteredAt.After(weekAgo) {
+				participantsThisWeek++
+			}
+		}
+	}
+
+	attendanceRate := 0.0
+	if totalParticipants > 0 {
+		attendanceRate = float64(totalVisited) / float64(totalParticipants) * 100
+	}
+
+	return map[string]interface{}{
+		"total_events":           totalEvents,
+		"events_this_month":      eventsThisMonth,
+		"total_participants":     totalParticipants,
+		"participants_this_week": participantsThisWeek,
+		"total_visited":          totalVisited,
+		"attendance_rate":        math.Round(attendanceRate*100) / 100,
 	}, nil
 }
