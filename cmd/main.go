@@ -77,6 +77,9 @@ func main() {
 	r.HandleFunc("/api/events/{id}/close-registration", eventHandler.CloseRegistration).Methods("POST")
 	r.HandleFunc("/api/events/{id}/stats", eventHandler.GetStats).Methods("GET")
 
+	// dashboard routes
+	r.HandleFunc("/api/dashboard/stats", eventHandler.GetDashboardStats).Methods("GET")
+
 	// Participant routes
 	r.HandleFunc("/api/public/events/{token}", participantHandler.GetPublicEvent).Methods("GET")
 	r.HandleFunc("/api/public/events/{token}/register", participantHandler.RegisterPublic).Methods("POST")
