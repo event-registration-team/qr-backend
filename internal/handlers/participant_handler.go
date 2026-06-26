@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"event-registration/internal/models"
@@ -19,6 +20,15 @@ type ParticipantHandler struct {
 	service      *service.ParticipantService
 	eventService *service.EventService
 	emailService *service.EmailService // добавить
+}
+
+func writePublicAPIError(w http.ResponseWriter, code, message string, statusCode int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(map[string]string{
+		"code":    code,
+		"message": message,
+	})
 }
 
 func NewParticipantHandler(
@@ -106,6 +116,133 @@ func (h *ParticipantHandler) Register(w http.ResponseWriter, r *http.Request) {
 		"message":     "Регистрация успешна",
 		"qr_token":    newParticipant.QRToken,
 		"participant": newParticipant,
+	})
+}
+
+// GetPublicEvent возвращает публичные данные мероприятия по токену регистрации.
+// GET /api/public/events/{token}
+func (h *ParticipantHandler) GetPublicEvent(w http.ResponseWriter, r *http.Request) {
+	token := mux.Vars(r)["token"]
+	if token == "" {
+		writePublicAPIError(w, "EVENT_NOT_FOUND", "Мероприятие не найдено", http.StatusNotFound)
+		return
+	}
+
+	event, err := h.eventService.GetEventByRegistrationLink(token)
+	if err != nil {
+		writePublicAPIError(w, "EVENT_NOT_FOUND", "Мероприятие не найдено", http.StatusNotFound)
+		return
+	}
+
+	stats, err := h.eventService.GetStats(event.ID)
+	if err != nil {
+		writePublicAPIError(w, "INTERNAL_ERROR", "Ошибка получения мероприятия", http.StatusInternalServerError)
+		return
+	}
+
+	isFull := false
+	if event.MaxParticipants != nil {
+		isFull = stats["total"] >= *event.MaxParticipants
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":                 fmt.Sprintf("%d", event.ID),
+		"title":              event.Title,
+		"description":        event.Description,
+		"location":           event.Location,
+		"startAt":            event.StartAt,
+		"endAt":              event.EndAt,
+		"registrationStatus": event.RegistrationStatus,
+		"isFull":             isFull,
+		"requirePhone":       event.RequirePhone,
+		"requireCarNumber":   event.RequireCarNumber,
+	})
+}
+
+// RegisterPublic регистрирует участника по публичному токену мероприятия.
+// POST /api/public/events/{token}/register
+func (h *ParticipantHandler) RegisterPublic(w http.ResponseWriter, r *http.Request) {
+	token := mux.Vars(r)["token"]
+	event, err := h.eventService.GetEventByRegistrationLink(token)
+	if err != nil {
+		writePublicAPIError(w, "EVENT_NOT_FOUND", "Мероприятие не найдено", http.StatusNotFound)
+		return
+	}
+
+	if event.RegistrationStatus != "open" {
+		writePublicAPIError(w, "REGISTRATION_CLOSED", "Регистрация на мероприятие закрыта", http.StatusForbidden)
+		return
+	}
+
+	allowed, err := h.eventService.CheckRegistrationLimit(event.ID, event.MaxParticipants)
+	if err != nil {
+		writePublicAPIError(w, "INTERNAL_ERROR", "Ошибка проверки лимита", http.StatusInternalServerError)
+		return
+	}
+	if !allowed {
+		writePublicAPIError(w, "EVENT_FULL", "Все места заняты", http.StatusForbidden)
+		return
+	}
+
+	var payload struct {
+		LastName   string  `json:"lastName"`
+		FirstName  string  `json:"firstName"`
+		MiddleName *string `json:"middleName"`
+		Email      string  `json:"email"`
+		Phone      *string `json:"phone"`
+		CarNumber  *string `json:"carNumber"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		writePublicAPIError(w, "VALIDATION_ERROR", "Неверный формат данных", http.StatusBadRequest)
+		return
+	}
+
+	participant := &models.Participant{
+		EventID:     event.ID,
+		LastName:    payload.LastName,
+		FirstName:   payload.FirstName,
+		MiddleName:  payload.MiddleName,
+		Email:       payload.Email,
+		Phone:       payload.Phone,
+		CarNumber:   payload.CarNumber,
+		VisitStatus: "registered",
+	}
+
+	if err := h.service.CreateParticipant(participant, event.MaxParticipants); err != nil {
+		if errors.Is(err, service.ErrEmailAlreadyRegistered) {
+			writePublicAPIError(w, "EMAIL_ALREADY_REGISTERED", err.Error(), http.StatusConflict)
+			return
+		}
+		writePublicAPIError(w, "VALIDATION_ERROR", err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	go h.emailService.SendRegistrationEmail(participant, event)
+
+	pngData, err := qrcode.Encode(participant.QRToken, qrcode.Medium, 256)
+	if err != nil {
+		writePublicAPIError(w, "INTERNAL_ERROR", "Ошибка генерации QR-кода", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"participantId":  fmt.Sprintf("%d", participant.ID),
+		"qrToken":        participant.QRToken,
+		"qrImageDataUrl": "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngData),
+		"participant": map[string]interface{}{
+			"lastName":   participant.LastName,
+			"firstName":  participant.FirstName,
+			"middleName": participant.MiddleName,
+			"email":      participant.Email,
+		},
+		"event": map[string]interface{}{
+			"title":    event.Title,
+			"location": event.Location,
+			"startAt":  event.StartAt,
+		},
 	})
 }
 

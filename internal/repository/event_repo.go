@@ -44,7 +44,7 @@ func (r *EventRepo) CreateEvent(event *models.Event) error {
 // GetAllEvents получает список всех мероприятий
 func (r *EventRepo) GetAllEvents() ([]models.Event, error) {
 	query := `SELECT id, title, description, location, start_at, end_at, registration_status, registration_link, max_participants, materials_link, require_phone, require_car_number, created_at, updated_at FROM events ORDER BY start_at DESC`
-	
+
 	rows, err := r.db.Query(query)
 	if err != nil {
 		return nil, err
@@ -55,8 +55,8 @@ func (r *EventRepo) GetAllEvents() ([]models.Event, error) {
 	for rows.Next() {
 		var e models.Event
 		err := rows.Scan(
-			&e.ID, &e.Title, &e.Description, &e.Location, &e.StartAt, &e.EndAt, 
-			&e.RegistrationStatus, &e.RegistrationLink, &e.MaxParticipants, &e.MaterialsLink, 
+			&e.ID, &e.Title, &e.Description, &e.Location, &e.StartAt, &e.EndAt,
+			&e.RegistrationStatus, &e.RegistrationLink, &e.MaxParticipants, &e.MaterialsLink,
 			&e.RequirePhone, &e.RequireCarNumber, &e.CreatedAt, &e.UpdatedAt,
 		)
 		if err != nil {
@@ -70,15 +70,34 @@ func (r *EventRepo) GetAllEvents() ([]models.Event, error) {
 // GetEventByID получает одно мероприятие по ID
 func (r *EventRepo) GetEventByID(id int) (*models.Event, error) {
 	query := `SELECT id, title, description, location, start_at, end_at, registration_status, registration_link, max_participants, materials_link, require_phone, require_car_number, created_at, updated_at FROM events WHERE id = $1`
-	
+
 	var e models.Event
 	err := r.db.QueryRow(query, id).Scan(
-		&e.ID, &e.Title, &e.Description, &e.Location, &e.StartAt, &e.EndAt, 
-		&e.RegistrationStatus, &e.RegistrationLink, &e.MaxParticipants, &e.MaterialsLink, 
+		&e.ID, &e.Title, &e.Description, &e.Location, &e.StartAt, &e.EndAt,
+		&e.RegistrationStatus, &e.RegistrationLink, &e.MaxParticipants, &e.MaterialsLink,
 		&e.RequirePhone, &e.RequireCarNumber, &e.CreatedAt, &e.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil // Мероприятие не найдено
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &e, nil
+}
+
+// GetEventByRegistrationLink получает мероприятие по публичному токену регистрации.
+func (r *EventRepo) GetEventByRegistrationLink(registrationLink string) (*models.Event, error) {
+	query := `SELECT id, title, description, location, start_at, end_at, registration_status, registration_link, max_participants, materials_link, require_phone, require_car_number, created_at, updated_at FROM events WHERE registration_link = $1`
+
+	var e models.Event
+	err := r.db.QueryRow(query, registrationLink).Scan(
+		&e.ID, &e.Title, &e.Description, &e.Location, &e.StartAt, &e.EndAt,
+		&e.RegistrationStatus, &e.RegistrationLink, &e.MaxParticipants, &e.MaterialsLink,
+		&e.RequirePhone, &e.RequireCarNumber, &e.CreatedAt, &e.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
 	}
 	if err != nil {
 		return nil, err
@@ -104,7 +123,7 @@ func (r *EventRepo) UpdateEvent(event *models.Event) error {
 	if err != nil {
 		return err
 	}
-	
+
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
 		return sql.ErrNoRows

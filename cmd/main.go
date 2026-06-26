@@ -55,6 +55,12 @@ func main() {
 	// Создаем роутер
 	r := mux.NewRouter()
 
+	r.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	}).Methods("GET")
+
 	// === API Routes ===
 
 	// Admin routes
@@ -72,6 +78,8 @@ func main() {
 	r.HandleFunc("/api/events/{id}/stats", eventHandler.GetStats).Methods("GET")
 
 	// Participant routes
+	r.HandleFunc("/api/public/events/{token}", participantHandler.GetPublicEvent).Methods("GET")
+	r.HandleFunc("/api/public/events/{token}/register", participantHandler.RegisterPublic).Methods("POST")
 	r.HandleFunc("/api/participants/register", participantHandler.Register).Methods("POST")
 	r.HandleFunc("/api/participants/scan", participantHandler.GetByQRToken).Methods("GET")
 	r.HandleFunc("/api/participants/{id}/check-in", participantHandler.MarkAsVisited).Methods("POST")

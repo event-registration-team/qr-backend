@@ -58,6 +58,18 @@ func (s *EventService) GetEventByID(id int) (*models.Event, error) {
 	return event, nil
 }
 
+// GetEventByRegistrationLink получает мероприятие по публичному токену регистрации.
+func (s *EventService) GetEventByRegistrationLink(registrationLink string) (*models.Event, error) {
+	event, err := s.eventRepo.GetEventByRegistrationLink(registrationLink)
+	if err != nil {
+		return nil, err
+	}
+	if event == nil {
+		return nil, errors.New("мероприятие не найдено")
+	}
+	return event, nil
+}
+
 // UpdateEvent обновляет данные мероприятия
 func (s *EventService) UpdateEvent(event *models.Event) error {
 	if event.Title == "" || event.Location == "" {
