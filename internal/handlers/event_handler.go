@@ -312,3 +312,23 @@ func (h *EventHandler) GetDashboardStats(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
 }
+
+// GetHourlyStats возвращает статистику посещений по часам
+// GET /api/events/{id}/stats/hourly
+func (h *EventHandler) GetHourlyStats(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		utils.WriteJSONError(w, "Неверный ID", http.StatusBadRequest)
+		return
+	}
+
+	stats, err := h.service.GetHourlyStats(id)
+	if err != nil {
+		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(stats)
+}
