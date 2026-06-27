@@ -4,6 +4,7 @@ import (
 	"errors"
 	"event-registration/internal/models"
 	"event-registration/internal/repository"
+	"fmt"
 	"math"
 	"time"
 )
@@ -197,4 +198,46 @@ func (s *EventService) GetDashboardStats() (map[string]interface{}, error) {
 		"total_visited":          totalVisited,
 		"attendance_rate":        math.Round(attendanceRate*100) / 100,
 	}, nil
+}
+
+// GetHourlyStats возвращает статистику посещений по часам для мероприятия
+func (s *EventService) GetHourlyStats(eventID int) ([]map[string]interface{}, error) {
+	participants, err := s.participantRepo.GetParticipantsByEventID(eventID)
+	if err != nil {
+		return nil, err
+	}
+
+	hourlyCounts := make(map[int]int)
+	for _, p := range participants {
+		if p.CheckedInAt != nil {
+			hour := p.CheckedInAt.Hour()
+			hourlyCounts[hour]++
+		}
+	}
+
+	// Находим минимальный и максимальный час
+	minHour, maxHour := 23, 0
+	for hour := range hourlyCounts {
+		if hour < minHour {
+			minHour = hour
+		}
+		if hour > maxHour {
+			maxHour = hour
+		}
+	}
+
+	// Если никто не зачекинился — возвращаем пустой массив
+	if len(hourlyCounts) == 0 {
+		return []map[string]interface{}{}, nil
+	}
+
+	result := make([]map[string]interface{}, 0)
+	for hour := minHour; hour <= maxHour; hour++ {
+		result = append(result, map[string]interface{}{
+			"hour":  fmt.Sprintf("%02d:00", hour),
+			"count": hourlyCounts[hour],
+		})
+	}
+
+	return result, nil
 }

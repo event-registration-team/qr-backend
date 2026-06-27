@@ -70,6 +70,7 @@ func main() {
 	r.HandleFunc("/api/events/{id}/open-registration", eventHandler.OpenRegistration).Methods("POST")
 	r.HandleFunc("/api/events/{id}/close-registration", eventHandler.CloseRegistration).Methods("POST")
 	r.HandleFunc("/api/events/{id}/stats", eventHandler.GetStats).Methods("GET")
+	r.HandleFunc("/api/events/{id}/stats/hourly", eventHandler.GetHourlyStats).Methods("GET")
 
 	// dashboard routes
 	r.HandleFunc("/api/dashboard/stats", eventHandler.GetDashboardStats).Methods("GET")
