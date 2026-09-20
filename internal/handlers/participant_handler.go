@@ -8,6 +8,7 @@ import (
 	"event-registration/internal/service"
 	"event-registration/pkg/utils"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -108,7 +109,15 @@ func (h *ParticipantHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go h.emailService.SendRegistrationEmail(newParticipant, event)
+	go func() {
+		if err := h.emailService.SendRegistrationEmail(newParticipant, event); err != nil {
+			log.Printf("ошибка отправки письма участнику %s (event %d): %v", newParticipant.Email, event.ID, err)
+			return
+		}
+		if err := h.service.MarkEmailSent(newParticipant.ID, true); err != nil {
+			log.Printf("ошибка обновления email_sent для участника %d: %v", newParticipant.ID, err)
+		}
+	}()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -218,7 +227,15 @@ func (h *ParticipantHandler) RegisterPublic(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	go h.emailService.SendRegistrationEmail(participant, event)
+	go func() {
+		if err := h.emailService.SendRegistrationEmail(participant, event); err != nil {
+			log.Printf("ошибка отправки письма участнику %s (event %d): %v", participant.Email, event.ID, err)
+			return
+		}
+		if err := h.service.MarkEmailSent(participant.ID, true); err != nil {
+			log.Printf("ошибка обновления email_sent для участника %d: %v", participant.ID, err)
+		}
+	}()
 
 	pngData, err := qrcode.Encode(participant.QRToken, qrcode.Medium, 256)
 	if err != nil {
@@ -443,7 +460,11 @@ func (h *ParticipantHandler) ImportFromExcel(w http.ResponseWriter, r *http.Requ
 
 	go func(e *models.Event, eID int) {
 		participants, _ := h.service.GetParticipantsByEventID(eID)
-		h.emailService.SendBulkRegistrationEmails(participants, e)
+		if errs := h.emailService.SendBulkRegistrationEmails(participants, e); len(errs) > 0 {
+			for _, err := range errs {
+				log.Printf("ошибка массовой отправки (event %d): %v", eID, err)
+			}
+		}
 	}(event, eventID)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -478,4 +499,45 @@ func (h *ParticipantHandler) GetQRCode(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=qr_%d.png", id))
 	w.Write(pngData)
+}
+
+// ResendEmail повторно отправляет письмо с QR-кодом участнику
+// POST /api/participants/{id}/resend-email
+func (h *ParticipantHandler) ResendEmail(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		utils.WriteJSONError(w, "Неверный ID", http.StatusBadRequest)
+		return
+	}
+
+	participant, err := h.service.GetParticipantByID(id)
+	if err != nil {
+		utils.WriteJSONError(w, "Участник не найден", http.StatusNotFound)
+		return
+	}
+
+	event, err := h.eventService.GetEventByID(participant.EventID)
+	if err != nil {
+		utils.WriteJSONError(w, "Мероприятие не найдено", http.StatusNotFound)
+		return
+	}
+
+	if err := h.emailService.SendRegistrationEmail(participant, event); err != nil {
+		log.Printf("ошибка повторной отправки письма участнику %s (event %d): %v", participant.Email, event.ID, err)
+		if updErr := h.service.MarkEmailSent(id, false); updErr != nil {
+			log.Printf("ошибка обновления email_sent для участника %d: %v", id, updErr)
+		}
+		utils.WriteJSONError(w, "Не удалось отправить письмо", http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.service.MarkEmailSent(id, true); err != nil {
+		log.Printf("ошибка обновления email_sent для участника %d: %v", id, err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Письмо отправлено повторно",
+	})
 }

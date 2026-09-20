@@ -21,13 +21,7 @@ func NewEmailService(cfg config.SMTPConfig) *EmailService {
 
 // SendRegistrationEmail отправляет письмо с QR-кодом после регистрации
 func (s *EmailService) SendRegistrationEmail(participant *models.Participant, event *models.Event) error {
-	// Генерируем QR-код
-	qrPNG, err := utils.GenerateQRCode(participant.QRToken, 256)
-	if err != nil {
-		return fmt.Errorf("ошибка генерации QR-кода: %w", err)
-	}
-
-	qrBase64 := base64.StdEncoding.EncodeToString(qrPNG)
+	qrURL := fmt.Sprintf("%s/api/participants/%d/qrcode", s.cfg.PublicURL, participant.ID)
 
 	subject := fmt.Sprintf("Вы зарегистрированы: %s", event.Title)
 
@@ -43,9 +37,9 @@ func (s *EmailService) SendRegistrationEmail(participant *models.Participant, ev
     <tr><td style="padding: 8px; font-weight: bold;">Дата</td><td style="padding: 8px;">%s — %s</td></tr>
     <tr><td style="padding: 8px; font-weight: bold;">Место</td><td style="padding: 8px;">%s</td></tr>
   </table>
-  <p>Ваш QR-код для входа:</p>
-  <img src="data:image/png;base64,%s" alt="QR-код" style="width: 200px; height: 200px;" />
-  <p style="color: #888; font-size: 12px;">Покажите этот QR-код на входе. Не передавайте его третьим лицам.</p>
+  <p>Ваш QR-код для входа доступен по ссылке:</p>
+  <p><a href="%s" style="display: inline-block; padding: 12px 24px; background-color: #4CAF50; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: bold;">Открыть мой QR-код</a></p>
+  <p style="color: #888; font-size: 12px;">Откройте ссылку и покажите QR-код на входе. Не передавайте его третьим лицам.</p>
 </body>
 </html>`,
 		participant.FirstName, participant.LastName,
@@ -53,7 +47,7 @@ func (s *EmailService) SendRegistrationEmail(participant *models.Participant, ev
 		utils.FormatDateTime(event.StartAt),
 		utils.FormatDateTime(event.EndAt),
 		event.Location,
-		qrBase64,
+		qrURL,
 	)
 
 	return s.send(participant.Email, subject, body)

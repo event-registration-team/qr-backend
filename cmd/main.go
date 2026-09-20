@@ -91,6 +91,7 @@ func main() {
 	r.HandleFunc("/api/participants/export", participantHandler.ExportToExcel).Methods("GET")
 	r.HandleFunc("/api/participants/import", participantHandler.ImportFromExcel).Methods("POST")
 	r.HandleFunc("/api/participants/{id}/qrcode", participantHandler.GetQRCode).Methods("GET")
+	r.HandleFunc("/api/participants/{id}/resend-email", participantHandler.ResendEmail).Methods("POST")
 
 	// Получаем порт из конфигурации
 	port := cfg.Server.Port

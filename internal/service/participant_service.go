@@ -94,6 +94,11 @@ func (s *ParticipantService) CountParticipantsByEventID(eventID int) (int, error
 	return s.repo.CountParticipantsByEventID(eventID)
 }
 
+// MarkEmailSent обновляет статус отправки письма
+func (s *ParticipantService) MarkEmailSent(id int, sent bool) error {
+	return s.repo.UpdateEmailSent(id, sent)
+}
+
 // generateQRToken генерирует уникальный QR-токен с использованием UUID
 func generateQRToken() string {
 	return uuid.New().String()
