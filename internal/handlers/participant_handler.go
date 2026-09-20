@@ -8,6 +8,7 @@ import (
 	"event-registration/internal/service"
 	"event-registration/pkg/utils"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -108,7 +109,11 @@ func (h *ParticipantHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go h.emailService.SendRegistrationEmail(newParticipant, event)
+	go func() {
+		if err := h.emailService.SendRegistrationEmail(newParticipant, event); err != nil {
+			log.Printf("ошибка отправки письма участнику %s (event %d): %v", newParticipant.Email, event.ID, err)
+		}
+	}()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -218,7 +223,11 @@ func (h *ParticipantHandler) RegisterPublic(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	go h.emailService.SendRegistrationEmail(participant, event)
+	go func() {
+		if err := h.emailService.SendRegistrationEmail(participant, event); err != nil {
+			log.Printf("ошибка отправки письма участнику %s (event %d): %v", participant.Email, event.ID, err)
+		}
+	}()
 
 	pngData, err := qrcode.Encode(participant.QRToken, qrcode.Medium, 256)
 	if err != nil {
@@ -443,7 +452,11 @@ func (h *ParticipantHandler) ImportFromExcel(w http.ResponseWriter, r *http.Requ
 
 	go func(e *models.Event, eID int) {
 		participants, _ := h.service.GetParticipantsByEventID(eID)
-		h.emailService.SendBulkRegistrationEmails(participants, e)
+		if errs := h.emailService.SendBulkRegistrationEmails(participants, e); len(errs) > 0 {
+			for _, err := range errs {
+				log.Printf("ошибка массовой отправки (event %d): %v", eID, err)
+			}
+		}
 	}(event, eventID)
 
 	w.Header().Set("Content-Type", "application/json")
