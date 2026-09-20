@@ -42,14 +42,14 @@ func (r *ParticipantRepo) CreateParticipant(participant *models.Participant) err
 // GetParticipantByID получает участника по ID
 func (r *ParticipantRepo) GetParticipantByID(id int) (*models.Participant, error) {
 	query := `
-		SELECT id, event_id, last_name, first_name, middle_name, email, phone, car_number, 
-		       qr_token, visit_status, checked_in_at, registered_at, created_at, updated_at 
+		SELECT id, event_id, last_name, first_name, middle_name, email, phone, car_number,
+		       qr_token, visit_status, email_sent, checked_in_at, registered_at, created_at, updated_at
 		FROM participants WHERE id = $1`
 
 	var p models.Participant
 	err := r.db.QueryRow(query, id).Scan(
 		&p.ID, &p.EventID, &p.LastName, &p.FirstName, &p.MiddleName, &p.Email,
-		&p.Phone, &p.CarNumber, &p.QRToken, &p.VisitStatus, &p.CheckedInAt,
+		&p.Phone, &p.CarNumber, &p.QRToken, &p.VisitStatus, &p.EmailSent, &p.CheckedInAt,
 		&p.RegisteredAt, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -64,14 +64,14 @@ func (r *ParticipantRepo) GetParticipantByID(id int) (*models.Participant, error
 // GetParticipantByQRToken находит участника по QR-токену (для сканирования)
 func (r *ParticipantRepo) GetParticipantByQRToken(qrToken string) (*models.Participant, error) {
 	query := `
-		SELECT id, event_id, last_name, first_name, middle_name, email, phone, car_number, 
-		       qr_token, visit_status, checked_in_at, registered_at, created_at, updated_at 
+		SELECT id, event_id, last_name, first_name, middle_name, email, phone, car_number,
+		       qr_token, visit_status, email_sent, checked_in_at, registered_at, created_at, updated_at
 		FROM participants WHERE qr_token = $1`
 
 	var p models.Participant
 	err := r.db.QueryRow(query, qrToken).Scan(
 		&p.ID, &p.EventID, &p.LastName, &p.FirstName, &p.MiddleName, &p.Email,
-		&p.Phone, &p.CarNumber, &p.QRToken, &p.VisitStatus, &p.CheckedInAt,
+		&p.Phone, &p.CarNumber, &p.QRToken, &p.VisitStatus, &p.EmailSent, &p.CheckedInAt,
 		&p.RegisteredAt, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -86,8 +86,8 @@ func (r *ParticipantRepo) GetParticipantByQRToken(qrToken string) (*models.Parti
 // GetParticipantsByEventID получает всех участников мероприятия
 func (r *ParticipantRepo) GetParticipantsByEventID(eventID int) ([]models.Participant, error) {
 	query := `
-		SELECT id, event_id, last_name, first_name, middle_name, email, phone, car_number, 
-		       qr_token, visit_status, checked_in_at, registered_at, created_at, updated_at 
+		SELECT id, event_id, last_name, first_name, middle_name, email, phone, car_number,
+		       qr_token, visit_status, email_sent, checked_in_at, registered_at, created_at, updated_at
 		FROM participants WHERE event_id = $1 ORDER BY registered_at DESC`
 
 	rows, err := r.db.Query(query, eventID)
@@ -101,7 +101,7 @@ func (r *ParticipantRepo) GetParticipantsByEventID(eventID int) ([]models.Partic
 		var p models.Participant
 		err := rows.Scan(
 			&p.ID, &p.EventID, &p.LastName, &p.FirstName, &p.MiddleName, &p.Email,
-			&p.Phone, &p.CarNumber, &p.QRToken, &p.VisitStatus, &p.CheckedInAt,
+			&p.Phone, &p.CarNumber, &p.QRToken, &p.VisitStatus, &p.EmailSent, &p.CheckedInAt,
 			&p.RegisteredAt, &p.CreatedAt, &p.UpdatedAt,
 		)
 		if err != nil {
@@ -174,14 +174,14 @@ func (r *ParticipantRepo) DeleteParticipant(id int) error {
 // GetParticipantByEventIDAndEmail находит участника по event_id и email
 func (r *ParticipantRepo) GetParticipantByEventIDAndEmail(eventID int, email string) (*models.Participant, error) {
 	query := `
-		SELECT id, event_id, last_name, first_name, middle_name, email, phone, car_number, 
-		       qr_token, visit_status, checked_in_at, registered_at, created_at, updated_at 
+		SELECT id, event_id, last_name, first_name, middle_name, email, phone, car_number,
+		       qr_token, visit_status, email_sent, checked_in_at, registered_at, created_at, updated_at
 		FROM participants WHERE event_id = $1 AND email = $2`
 
 	var p models.Participant
 	err := r.db.QueryRow(query, eventID, email).Scan(
 		&p.ID, &p.EventID, &p.LastName, &p.FirstName, &p.MiddleName, &p.Email,
-		&p.Phone, &p.CarNumber, &p.QRToken, &p.VisitStatus, &p.CheckedInAt,
+		&p.Phone, &p.CarNumber, &p.QRToken, &p.VisitStatus, &p.EmailSent, &p.CheckedInAt,
 		&p.RegisteredAt, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -243,4 +243,18 @@ func (r *ParticipantRepo) CreateParticipantTx(participant *models.Participant, m
 	}
 
 	return tx.Commit()
+}
+
+// UpdateEmailSent обновляет статус отправки письма участнику
+func (r *ParticipantRepo) UpdateEmailSent(id int, sent bool) error {
+	query := `UPDATE participants SET email_sent = $1, updated_at = $2 WHERE id = $3`
+	result, err := r.db.Exec(query, sent, time.Now(), id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }

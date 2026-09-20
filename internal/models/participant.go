@@ -13,6 +13,7 @@ type Participant struct {
 	CarNumber    *string    `json:"car_number,omitempty" db:"car_number"`
 	QRToken      string     `json:"qr_token" db:"qr_token"`
 	VisitStatus  string     `json:"visit_status" db:"visit_status"`
+	EmailSent    bool       `json:"email_sent" db:"email_sent"`
 	CheckedInAt  *time.Time `json:"checked_in_at,omitempty" db:"checked_in_at"`
 	RegisteredAt time.Time  `json:"registered_at" db:"registered_at"`
 	CreatedAt    time.Time  `json:"created_at" db:"created_at"`
