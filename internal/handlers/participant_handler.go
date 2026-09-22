@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -478,4 +479,27 @@ func (h *ParticipantHandler) GetQRCode(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/png")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=qr_%d.png", id))
 	w.Write(pngData)
+}
+
+// DeleteParticipant удаляет участника
+// DELETE /api/participants/{id}
+func (h *ParticipantHandler) DeleteParticipant(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		utils.WriteJSONError(w, "Неверный ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.service.DeleteParticipant(id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			utils.WriteJSONError(w, "Участник не найден", http.StatusNotFound)
+			return
+		}
+		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Участник удален"})
 }
