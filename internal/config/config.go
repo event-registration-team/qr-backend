@@ -27,11 +27,12 @@ type ServerConfig struct {
 }
 
 type SMTPConfig struct {
-	Host     string
-	Port     string
-	Username string
-	Password string
-	From     string
+	Host      string
+	Port      string
+	Username  string
+	Password  string
+	From      string
+	PublicURL string
 }
 
 func Load() *Config {
@@ -53,11 +54,12 @@ func Load() *Config {
 			Port: getEnv("SERVER_PORT", "8080"),
 		},
 		SMTP: SMTPConfig{
-			Host:     getEnv("SMTP_HOST", ""),
-			Port:     getEnv("SMTP_PORT", "587"),
-			Username: getEnv("SMTP_USERNAME", ""),
-			Password: getEnv("SMTP_PASSWORD", ""),
-			From:     getEnv("SMTP_FROM", ""),
+			Host:      getEnv("SMTP_HOST", ""),
+			Port:      getEnv("SMTP_PORT", "587"),
+			Username:  getEnv("SMTP_USERNAME", ""),
+			Password:  getEnv("SMTP_PASSWORD", ""),
+			From:      getEnv("SMTP_FROM", ""),
+			PublicURL: getEnv("PUBLIC_URL", ""),
 		},
 	}
 }
